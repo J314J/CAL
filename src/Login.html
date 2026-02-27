@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - DGAD Admin</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .login-container { background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 400px; width: 100%; animation: slideIn 0.5s ease; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+    .logo { text-align: center; margin-bottom: 30px; }
+    .logo h1 { color: #667eea; font-size: 32px; margin-bottom: 5px; }
+    .logo p { color: #666; font-size: 14px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; font-size: 14px; }
+    .form-group input { width: 100%; padding: 12px 15px; border: 2px solid #eee; border-radius: 10px; font-size: 14px; transition: all 0.3s ease; }
+    .form-group input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+    .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; margin-top: 10px; }
+    .btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .link { text-align: center; margin-top: 20px; }
+    .link a { color: #667eea; text-decoration: none; font-size: 14px; }
+    .link a:hover { text-decoration: underline; }
+    .alert { padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; display: none; }
+    .alert.show { display: block; animation: slideDown 0.3s ease; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    .alert-error   { background: #fee; color: #c33; border: 1px solid #fcc; }
+    .alert-success { background: #efe; color: #3c3; border: 1px solid #cfc; }
+    .alert-info    { background: #e3f2fd; color: #1565c0; border: 1px solid #90caf9; }
+    .loading { display: none; text-align: center; padding: 20px; }
+    .loading.show { display: block; }
+    .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .otp-timer { text-align: center; margin-top: 10px; color: #666; font-size: 13px; }
+    .otp-timer.warning { color: #ff6b6b; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo">
+      <h1>🎓 DGAD</h1>
+      <p>Panel de Administración</p>
+    </div>
+
+    <div id="alertBox" class="alert"></div>
+
+    <!-- FORMULARIO DE LOGIN -->
+    <div id="loginForm">
+      <form id="formLogin" onsubmit="return solicitarOTP(event);">
+        <div class="form-group">
+          <label for="email">Correo Electrónico</label>
+          <input type="email" id="email" placeholder="usuario@ejemplo.com" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label for="password">Contraseña</label>
+          <input type="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn" id="btnLogin">Iniciar Sesión</button>
+      </form>
+      <div class="link">
+        <a href="#" onclick="mostrarResetPassword(); return false;">¿Olvidaste tu contraseña?</a>
+      </div>
+    </div>
+
+    <!-- FORMULARIO DE VERIFICACIÓN OTP -->
+    <div id="otpForm" style="display: none;">
+      <p style="text-align: center; color: #666; margin-bottom: 20px;">
+        📧 Hemos enviado un código de 6 dígitos a:<br>
+        <strong id="emailDisplay"></strong>
+      </p>
+      <form id="formOTP" onsubmit="return verificarOTP(event);">
+        <div class="form-group">
+          <label for="otpCode">Código de Verificación</label>
+          <input type="text" id="otpCode" placeholder="123456" required maxlength="6" pattern="[0-9]{6}"
+            style="text-align: center; font-size: 24px; letter-spacing: 8px; font-family: monospace;"
+            autocomplete="off">
+        </div>
+        <div class="otp-timer" id="otpTimer"></div>
+        <button type="submit" class="btn">Verificar e Iniciar Sesión</button>
+      </form>
+      <div class="link">
+        <a href="#" onclick="reenviarOTP(); return false;" id="linkReenviar">Reenviar código</a> •
+        <a href="#" onclick="cancelarOTP(); return false;">Cancelar</a>
+      </div>
+    </div>
+
+    <!-- FORMULARIO DE RESET PASSWORD -->
+    <div id="resetForm" style="display: none;">
+      <p style="text-align: center; color: #666; margin-bottom: 20px;">
+        Ingresa tu correo para recibir un enlace de recuperación
+      </p>
+      <form id="formReset" onsubmit="return resetearPassword(event);">
+        <div class="form-group">
+          <label for="emailReset">Correo Electrónico</label>
+          <input type="email" id="emailReset" placeholder="usuario@ejemplo.com" required>
+        </div>
+        <button type="submit" class="btn">Enviar enlace de recuperación</button>
+      </form>
+      <div class="link">
+        <a href="#" onclick="mostrarLogin(); return false;">Volver al login</a>
+      </div>
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <p style="margin-top: 10px; color: #666;" id="loadingText">Procesando...</p>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+  <script>
+    // ============================================
+    // FIREBASE CONFIG
+    // ─────────────────────────────────────────────
+    // Reemplaza los valores YOUR_* con los de tu
+    // proyecto Firebase (Firebase Console →
+    // Configuración del proyecto → Tus apps → Web).
+    // NO hagas commit con valores reales aquí.
+    // Ver README.md para instrucciones completas.
+    // ─────────────────────────────────────────────
+    const firebaseConfig = {
+      apiKey:            "YOUR_FIREBASE_API_KEY",
+      authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId:         "YOUR_PROJECT_ID",
+      storageBucket:     "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId:             "YOUR_APP_ID"
+    };
+
+    // URL del deployment (Apps Script → Implementar → Web App → URL)
+    // Pégala aquí después del primer despliegue.
+    const DEPLOYMENT_URL = 'YOUR_DEPLOYMENT_URL';
+    // ============================================
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    // Estado del flujo OTP (en memoria, no en localStorage)
+    let sessionData = {
+      email: '',
+      password: '',
+      displayName: '',
+      otpCode: '',
+      otpExpiry: 0,
+      intentosRestantes: 3
+    };
+    let timerInterval  = null;
+    let esperandoOTP   = false;
+
+    // ============================================
+    // VERIFICAR SESIÓN ACTIVA AL CARGAR
+    // ============================================
+    auth.onAuthStateChanged(function(user) {
+      if (user && user.emailVerified && !esperandoOTP) {
+        window.location.href = DEPLOYMENT_URL + '?page=admin';
+      }
+    });
+
+    // ============================================
+    // PASO 1: VALIDAR CREDENCIALES Y ENVIAR OTP
+    // ============================================
+    function solicitarOTP(event) {
+      event.preventDefault();
+      const email    = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if (!email || !password) { mostrarAlerta('error', '❌ Por favor completa todos los campos'); return false; }
+
+      mostrarCargando(true, 'Validando credenciales...');
+      ocultarAlerta();
+      esperandoOTP = true;
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then(function(uc) {
+          sessionData.email       = email;
+          sessionData.password    = password;
+          sessionData.displayName = uc.user.displayName || email.split('@')[0];
+          return auth.signOut();
+        })
+        .then(function() {
+          const otp = Math.floor(100000 + Math.random() * 900000).toString();
+          sessionData.otpCode           = otp;
+          sessionData.otpExpiry         = Date.now() + 5 * 60 * 1000;
+          sessionData.intentosRestantes = 3;
+
+          mostrarCargando(true, 'Enviando código a tu correo...');
+          google.script.run
+            .withSuccessHandler(function(resultado) {
+              mostrarCargando(false);
+              if (resultado && resultado.success) {
+                document.getElementById('loginForm').style.display  = 'none';
+                document.getElementById('otpForm').style.display    = 'block';
+                document.getElementById('emailDisplay').textContent = email;
+                mostrarAlerta('success', '✅ ¡Código enviado! Revisa tu correo.');
+                iniciarTemporizadorOTP();
+                setTimeout(function() { document.getElementById('otpCode').focus(); }, 500);
+              } else {
+                esperandoOTP = false;
+                mostrarAlerta('error', '❌ Error al enviar código: ' + (resultado ? resultado.message : 'Error desconocido'));
+                mostrarLogin();
+              }
+            })
+            .withFailureHandler(function(error) {
+              mostrarCargando(false);
+              esperandoOTP = false;
+              mostrarAlerta('error', '❌ Error al enviar código. Por favor intenta de nuevo.');
+              mostrarLogin();
+            })
+            .enviarCodigoOTP(email, sessionData.displayName, otp);
+        })
+        .catch(function(error) {
+          mostrarCargando(false);
+          esperandoOTP = false;
+          const msgs = {
+            'auth/invalid-email':       '❌ Correo electrónico inválido',
+            'auth/user-not-found':      '❌ Usuario no encontrado',
+            'auth/wrong-password':      '❌ Contraseña incorrecta',
+            'auth/too-many-requests':   '❌ Demasiados intentos. Intenta más tarde',
+            'auth/invalid-credential':  '❌ Credenciales inválidas',
+          };
+          mostrarAlerta('error', msgs[error.code] || '❌ Error: ' + error.message);
+        });
+
+      return false;
+    }
+
+    // ============================================
+    // PASO 2: VERIFICAR OTP E INICIAR SESIÓN
+    // ============================================
+    function verificarOTP(event) {
+      event.preventDefault();
+      const codeIngresado = document.getElementById('otpCode').value.trim();
+      if (!codeIngresado || codeIngresado.length !== 6) { mostrarAlerta('error', '❌ Por favor ingresa el código de 6 dígitos'); return false; }
+      if (Date.now() > sessionData.otpExpiry) { mostrarAlerta('error', '❌ Código expirado. Solicita uno nuevo.'); setTimeout(cancelarOTP, 2000); return false; }
+      if (codeIngresado !== sessionData.otpCode) {
+        sessionData.intentosRestantes--;
+        if (sessionData.intentosRestantes <= 0) {
+          mostrarAlerta('error', '❌ Demasiados intentos incorrectos. Por favor solicita un nuevo código.');
+          setTimeout(cancelarOTP, 2000);
+        } else {
+          mostrarAlerta('error', `❌ Código incorrecto. Te quedan ${sessionData.intentosRestantes} intentos.`);
+        }
+        return false;
+      }
+
+      mostrarCargando(true, 'Iniciando sesión...');
+      detenerTemporizadorOTP();
+      esperandoOTP = false;
+
+      auth.signInWithEmailAndPassword(sessionData.email, sessionData.password)
+        .then(function(uc) {
+          // Limpiar datos de sesión de memoria
+          sessionData = { email: '', password: '', displayName: '', otpCode: '', otpExpiry: 0, intentosRestantes: 3 };
+          google.script.run
+            .withSuccessHandler(function() {
+              mostrarAlerta('success', '✅ ¡Verificación exitosa! Redirigiendo...');
+              setTimeout(function() { window.location.href = DEPLOYMENT_URL + '?page=admin'; }, 1000);
+            })
+            .withFailureHandler(function() {
+              window.location.href = DEPLOYMENT_URL + '?page=admin';
+            })
+            .establecerSesion(uc.user.email, 1);
+        })
+        .catch(function(error) {
+          mostrarCargando(false);
+          esperandoOTP = false;
+          mostrarAlerta('error', '❌ Error al iniciar sesión: ' + error.message);
+        });
+
+      return false;
+    }
+
+    // ============================================
+    // TEMPORIZADOR OTP
+    // ============================================
+    function iniciarTemporizadorOTP() {
+      detenerTemporizadorOTP();
+      timerInterval = setInterval(function() {
+        const restante = sessionData.otpExpiry - Date.now();
+        if (restante <= 0) {
+          detenerTemporizadorOTP();
+          document.getElementById('otpTimer').innerHTML = '<span class="warning">⏰ Código expirado</span>';
+          document.getElementById('otpCode').disabled = true;
+          mostrarAlerta('error', '❌ El código ha expirado. Por favor solicita uno nuevo.');
+          return;
+        }
+        const m = Math.floor(restante / 60000), s = Math.floor((restante % 60000) / 1000);
+        const el = document.getElementById('otpTimer');
+        el.textContent = `⏱️ Código válido por: ${m}:${s.toString().padStart(2, '0')}`;
+        if (restante < 60000) el.classList.add('warning');
+      }, 1000);
+    }
+
+    function detenerTemporizadorOTP() {
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    }
+
+    // ============================================
+    // REENVIAR / CANCELAR OTP
+    // ============================================
+    function reenviarOTP() {
+      detenerTemporizadorOTP();
+      esperandoOTP = false;
+      document.getElementById('otpCode').value    = '';
+      document.getElementById('otpCode').disabled = false;
+      document.getElementById('otpForm').style.display    = 'none';
+      document.getElementById('loginForm').style.display  = 'block';
+      ocultarAlerta();
+      mostrarAlerta('info', '📧 Ingresa tus credenciales para recibir un nuevo código.');
+    }
+
+    function cancelarOTP() {
+      detenerTemporizadorOTP();
+      esperandoOTP = false;
+      mostrarLogin();
+    }
+
+    // ============================================
+    // RESET PASSWORD
+    // ============================================
+    function resetearPassword(event) {
+      event.preventDefault();
+      const email = document.getElementById('emailReset').value.trim();
+      if (!email) { mostrarAlerta('error', '❌ Por favor ingresa tu correo'); return false; }
+      mostrarCargando(true, 'Enviando enlace...');
+      ocultarAlerta();
+      auth.sendPasswordResetEmail(email)
+        .then(function() { mostrarCargando(false); mostrarAlerta('success', '✅ ¡Enlace enviado! Revisa tu correo.'); setTimeout(mostrarLogin, 3000); })
+        .catch(function(error) {
+          mostrarCargando(false);
+          const msgs = { 'auth/invalid-email': '❌ Correo inválido', 'auth/user-not-found': '❌ No existe un usuario con este correo' };
+          mostrarAlerta('error', msgs[error.code] || '❌ Error: ' + error.message);
+        });
+      return false;
+    }
+
+    // ============================================
+    // UI HELPERS
+    // ============================================
+    function mostrarResetPassword() {
+      esperandoOTP = false; detenerTemporizadorOTP();
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('otpForm').style.display   = 'none';
+      document.getElementById('resetForm').style.display = 'block';
+      document.getElementById('loading').style.display   = 'none';
+      ocultarAlerta();
+    }
+
+    function mostrarLogin() {
+      esperandoOTP = false; detenerTemporizadorOTP();
+      document.getElementById('loginForm').style.display = 'block';
+      document.getElementById('otpForm').style.display   = 'none';
+      document.getElementById('resetForm').style.display = 'none';
+      document.getElementById('loading').style.display   = 'none';
+      ocultarAlerta();
+      document.getElementById('email').value    = '';
+      document.getElementById('password').value = '';
+      document.getElementById('otpCode').value    = '';
+      document.getElementById('otpCode').disabled = false;
+      sessionData = { email: '', password: '', displayName: '', otpCode: '', otpExpiry: 0, intentosRestantes: 3 };
+    }
+
+    function mostrarCargando(mostrar, texto) {
+      const d = document.getElementById('loading');
+      if (mostrar) {
+        d.classList.add('show');
+        if (texto) document.getElementById('loadingText').textContent = texto;
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('otpForm').style.display   = 'none';
+        document.getElementById('resetForm').style.display = 'none';
+      } else {
+        d.classList.remove('show');
+      }
+    }
+
+    function mostrarAlerta(tipo, mensaje) {
+      const a = document.getElementById('alertBox');
+      a.className   = 'alert alert-' + tipo + ' show';
+      a.textContent = mensaje;
+      if (tipo !== 'error') setTimeout(ocultarAlerta, 5000);
+    }
+
+    function ocultarAlerta() { document.getElementById('alertBox').className = 'alert'; }
+
+    window.addEventListener('beforeunload', detenerTemporizadorOTP);
+  </script>
+</body>
+</html>
